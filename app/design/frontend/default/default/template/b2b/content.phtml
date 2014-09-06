@@ -1,0 +1,186 @@
+<?php
+/**
+ * Magento
+ *
+ * NOTICE OF LICENSE
+ *
+ * This source file is subject to the Academic Free License (AFL 3.0)
+ * that is bundled with this package in the file LICENSE_AFL.txt.
+ * It is also available through the world-wide-web at this URL:
+ * http://opensource.org/licenses/afl-3.0.php
+ * If you did not receive a copy of the license and are unable to
+ * obtain it through the world-wide-web, please send an email
+ * to license@magentocommerce.com so we can send you a copy immediately.
+ *
+ * DISCLAIMER
+ *
+ * Do not edit or add to this file if you wish to upgrade Magento to newer
+ * versions in the future. If you wish to customize Magento for your
+ * needs please refer to http://www.magentocommerce.com for more information.
+ *
+ * @category    design
+ * @package     base_default
+ * @copyright   Copyright (c) 2009 Irubin Consulting Inc. DBA Varien (http://www.varien.com)
+ * @license     http://opensource.org/licenses/afl-3.0.php  Academic Free License (AFL 3.0)
+ */
+?>
+<?php 
+//	The "customer" or dealer/distributor must be logged in to use the B2b page:
+if(Mage::getSingleton('customer/session')->isLoggedIn()) {	
+	$name = Mage::getSingleton('customer/session')->getCustomer()->getName();
+} else {
+	// redirects to customer login page: 
+	Mage::app()->getFrontController()->getResponse()->setRedirect(Mage::getUrl('customer/account/login'));
+}
+
+Mage::getSingleton('customer/session')->setBeforeAuthUrl($this->getRequest()->getRequestUri());  //save requested URL for later redirection
+
+if( !isset($groupId) || !is_numeric($groupId) )
+	$groupId = Mage::getSingleton('customer/session')->getCustomerGroupId(); //Get Customers Group ID
+?>
+
+<div class="box">
+  <div class="box-content">
+<?php 
+
+// wholesale Customer groupIds:
+// YOU MUST SET THESE NUMBERS BY HAND!! 
+$wholesaleGroupIds = Array( 3, 5, 6 );
+
+// see http://stackoverflow.com/questions/1332742/magento-retrieve-products-with-a-specific-attribute-value
+// YOU MUST set the magic number(s) below! Adding more than one manufacturer is as easy as adding more: , array() 
+$_productCollection = Mage::getModel('catalog/product')
+	->getCollection()
+	->addAttributeToSelect('sku')
+	->addAttributeToFilter('status', 1)
+	->addAttributeToFilter('visibility', 4)
+	->addFieldToFilter( array(
+			array('attribute'=>'manufacturer','eq'=>'9999')
+// uncomment below to include more IDs to your list:
+//			, array('attribute'=>'manufacturer','eq'=>'143')
+//			, array('attribute'=>'manufacturer','eq'=>'139')
+		))
+	->setOrder('price', 'DESC')
+	;
+
+$_helper = $this->helper('catalog/output');
+
+//	Display list of manufacturers if there aren't any: 
+if( count($_productCollection) == 0 ) {
+	$manufacturer_items = Mage::getModel('eav/entity_attribute_option')->getCollection()->setStoreFilter()->join('attribute','attribute.attribute_id=main_table.attribute_id', 'attribute_code');
+	foreach ($manufacturer_items as $manufacturer_item) {
+		if ($manufacturer_item->getAttributeCode() == 'manufacturer') {
+			$manufacturer_options[$manufacturer_item->getOptionId()] = $manufacturer_item->getValue();
+		}
+	} // endforeach;
+
+	echo "<h4>These are your manufacturers and their IDs:</h4>";
+	echo "<pre>You must edit the file <b>app/design/frontend/default/default/template/b2b/content.phtml</b>\n\n"; 
+	echo "First visit <a href=\"/index.php/admin/customer_group/\">index.php/admin/customer_group/</a> as admin to get the customer group IDs \n";
+	echo "of your wholesale groups & note the dealers and distributor group IDs.\n\n";
+//		echo "\n\n";
+	echo "Open the file <b>app/design/frontend/default/default/template/b2b/content.phtml</b>:\n";
+	echo "\nLook for the line that has: <b>\$wholesaleGroupIds = Array( 3, 5, 6 );</b>\n";
+	echo "and change the 3, 5, 6 numbers to match the group IDs of your dealers and distributors.\n";
+	echo "\nNext, near line 60, look for <b>   array('attribute'=>'manufacturer','eq'=>'9999')</b>\n"; 
+	echo "... and change that 9999 number to the ID of the manufacturer you want to display.\n"; 
+	echo "\nChoose the manufacturer ID (or multiple IDs) from the list below.\n";
+	print_r($manufacturer_options);
+	echo"</pre>"; 
+
+} elseif( in_array($groupId,$wholesaleGroupIds) ) {
+	// This block builds the Wholesaler product list ... 
+	echo $this->getLayout()->createBlock('cms/block')->setBlockId('b2b-greeting')->toHtml();
+	echo "\n<h4>There are ".count($_productCollection)." products: </h4>";
+	echo '<div class="category-products">';
+
+	$_iterator = 0;
+	echo'<ol class="products-list" id="products-list">';
+
+	foreach ($_productCollection as $_product) {
+?>		<li class="item<?php if( ++$_iterator == sizeof($_productCollection) ): ?> last<?php endif; ?>">
+	<?php 
+	// http://stackoverflow.com/questions/12054165/magento-how-to-retrieve-the-minimal-price-of-i-e-grouped-products
+	$_product=Mage::getModel("catalog/product")->getCollection()
+		->addAttributeToSelect(Mage::getSingleton("catalog/config")->getProductAttributes())
+		->addAttributeToFilter("entity_id", $_product->getId())
+		->setPage(1, 1)
+		->addMinimalPrice()
+		->addFinalPrice()
+		->addTaxPercents()
+		->load()
+		->getFirstItem()
+	?>
+	<a href="<?php echo $_product->getProductUrl() ?>" title="<?php echo $this->stripTags($this->getImageLabel($_product, 'small_image'), null, true) ?>" class="product-image">
+		<img src="<?php echo $this->helper('catalog/image')->init($_product, 'small_image')->resize(135); ?>" width="115" height="115" alt="<?php echo $this->stripTags($this->getImageLabel($_product, 'small_image'), null, true) ?>" />
+	</a>
+	
+	<?php // Product description ?>
+	<div class="product-shop">
+	<div class="f-fix">
+		<?php $_productNameStripped = $this->stripTags($_product->getName(), null, true); ?>
+		<h2 class="product-name"><a href="<?php echo $_product->getProductUrl() ?>" title="<?php echo $_productNameStripped; ?>"><?php echo $_helper->productAttribute($_product, $_product->getName() , 'name'); ?></a></h2>
+		<?php if($_product->getRatingSummary()): ?>
+		<?php echo $this->getReviewsSummaryHtml($_product) ?>
+		<?php endif; ?>
+		<?php echo $this->getPriceHtml($_product, true) ?>
+		<?php if($_product->isSaleable()): ?>
+					<p><button type="button" title="<?php echo $this->__('Add to Cart') ?>" class="button btn-cart" onclick="setLocation('<?php echo $this->getAddToCartUrl($_product) ?>')"><span><span><?php echo $this->__('Add to Cart') ?></span></span></button></p>
+		<?php else: ?>
+		<p class="availability out-of-stock"><span><?php echo $this->__('Out of stock') ?></span></p>
+		<?php endif; ?>
+		<div class="desc std">
+			<a href="<?php echo $_product->getProductUrl() ?>" class="short-desc">
+				<?php // ckck 				Truncate short description in product listings, styled pop-ups via 
+				$length = 75;	// ckck 	CSS a:hover tricks; see: skin/frontend/default/a034/css/custom.css  (near line 150)
+				$html=$_helper->productAttribute($_product, $_product->getShortDescription(), 'short_description');
+				$_tmpstr=explode("<br />",$html); $html=implode(" ",$_tmpstr);	// completely strip "<br />" from the truncated $html
+				$_tmpstr=explode("<br/>",$html); $html=implode(" ",$_tmpstr);	// completely strip "<br />" from the truncated $html
+				$html=strip_tags($html);
+				if( strlen($html) > $length ) {
+					$html=Mage::helper('core/string')->truncate($html, $length, $etc = '', $remainder = '', $breakWords = false);
+					$html=$html."<em>+ more models</em> ... ".$this->__('Learn More');
+				} else { 
+					$html=$html." ... ".$this->__('Learn More');	// ckck 
+				}
+				$html="<blockquote>$html</blockquote>\n";
+				?>
+				<?php echo $html ?>
+				<span>
+					<span style="font-size:1.5em;font-style:italic;font-weight:bold"><?php echo $this->__('Fitment') ?></span>
+					<br />
+					<p>
+						<?php echo $_product->getShortDescription() ?>
+					</p>
+				</span>
+			</a>
+		</div>
+	</div>
+</div>
+        </li>
+<?php } // endforeach; ?>
+    </ol>
+    <script type="text/javascript">decorateList('products-list', 'none-recursive')</script>
+
+<?php //endif "are you a dealer" 
+} else {
+	echo $this->getLayout()->createBlock('cms/block')->setBlockId('b2b-not-dealer')->toHtml();
+}
+?>
+
+	</div>
+</div>
+<?php 
+function do_category( $category, $this ) {
+	echo "<ul>";
+	$cur_subcategory=Mage::getModel('catalog/category')->load($category->getId());
+	$layer = Mage::getSingleton('catalog/layer');
+	$layer->setCurrentCategory($cur_subcategory); 
+	?><li><a href="<?php echo $this->getCategoryUrl($category)?>"> <?php echo $category->getName()?></a></li> <? 			
+	echo "</ul>\n";
+	if( $cur_subcategory->getIsActive() ) {
+		do_category($_category, $this );
+	} //endif; 
+}
+
+?>

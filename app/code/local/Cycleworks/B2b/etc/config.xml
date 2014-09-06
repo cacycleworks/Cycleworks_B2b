@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+ 
+<config>
+    <modules>
+        <Cycleworks_B2b>
+            <version>0.1.0</version>
+        </Cycleworks_B2b>
+    </modules>   
+ 
+    <frontend>
+        <routers>
+            <cycleworks_b2b>
+                <use>standard</use>
+                <args>
+                    <module>Cycleworks_B2b</module>
+                    <frontName>b2b</frontName>
+                </args>
+            </cycleworks_b2b>
+        </routers>
+    </frontend>    
+</config>
